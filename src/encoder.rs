@@ -498,6 +498,22 @@ pub(crate) fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
   pyramid_depth - (pos | (1 << pyramid_depth)).trailing_zeros() as u64
 }
 
+fn fill_strengths(strengths: &mut [u8])
+{
+  let mut idx = 1;
+  let mut val = ((strengths[0] as i32) - 1) as i32;
+  while val >= 0 && idx < 4 {
+    strengths[idx] = val as u8;
+    val -= 1;
+    idx += 1;
+  }
+  val = (strengths[0] + 1) as i32;
+  for i in idx..8 {
+    strengths[i] = val as u8;
+    val += 1;
+  }
+}
+
 impl<T: Pixel> FrameInvariants<T> {
   #[allow(clippy::erasing_op, clippy::identity_op)]
   pub fn new(config: EncoderConfig, sequence: Sequence) -> Self {
@@ -588,7 +604,7 @@ impl<T: Pixel> FrameInvariants<T> {
       disable_frame_end_update_cdf: false,
       allow_warped_motion: false,
       cdef_damping: 3,
-      cdef_bits: 0,
+      cdef_bits: 3,
       cdef_y_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
       cdef_uv_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
       delta_q_present: false,
@@ -794,6 +810,9 @@ impl<T: Pixel> FrameInvariants<T> {
         self.cdef_y_strengths[0] = (predicted_y_f1 * CDEF_SEC_STRENGTHS as i32 + predicted_y_f2) as u8;
         self.cdef_uv_strengths[0] = (predicted_uv_f1 * CDEF_SEC_STRENGTHS as i32 + predicted_uv_f2) as u8;
     }
+
+    fill_strengths(&mut self.cdef_y_strengths);
+    fill_strengths(&mut self.cdef_uv_strengths);
   }
 
   #[inline(always)]
