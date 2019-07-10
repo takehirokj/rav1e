@@ -509,6 +509,9 @@ fn fill_strengths(strengths: &mut [u8])
   }
   val = (strengths[0] + 1) as i32;
   for i in idx..8 {
+    if val >= 64 {
+      break;
+    }
     strengths[i] = val as u8;
     val += 1;
   }
