@@ -2268,8 +2268,8 @@ fn encode_tile<'a, T: Pixel>(
 
       if cw.bc.cdef_coded {
         // CDEF index must be written in the middle, we can code it now
-        /*let cdef_index = cw.bc.blocks.get_cdef(tile_sbo);
-        cw.write_cdef(&mut w, cdef_index, fi.cdef_bits);*/
+        let cdef_index = cw.bc.blocks.get_cdef(tile_sbo);
+        cw.write_cdef(&mut w, cdef_index, fi.cdef_bits);
         // ...and then finally code what comes after the CDEF index
         w_post_cdef.replay(&mut w);
       }
