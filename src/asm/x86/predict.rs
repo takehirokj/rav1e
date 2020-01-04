@@ -127,10 +127,26 @@ pub fn dispatch_predict_intra<T: Pixel>(
           })(dst_ptr, stride, edge_ptr, w, h, ac_ptr, angle);
         }
         PredictionMode::H_PRED => {
-          rav1e_ipred_h_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
+          if angle == 180 {
+            rav1e_ipred_h_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
+          } else {
+            (if angle < 180 {
+              rav1e_ipred_z2_avx2
+            } else {
+              rav1e_ipred_z3_avx2
+            })(dst_ptr, stride, edge_ptr, w, h, angle);
+          }
         }
         PredictionMode::V_PRED => {
-          rav1e_ipred_v_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
+          if angle == 90 {
+            rav1e_ipred_v_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
+          } else {
+            (if angle <= 90 {
+              rav1e_ipred_z1_avx2
+            } else {
+              rav1e_ipred_z2_avx2
+            })(dst_ptr, stride, edge_ptr, w, h, angle);
+          }
         }
         PredictionMode::PAETH_PRED => {
           rav1e_ipred_paeth_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
@@ -180,10 +196,18 @@ pub fn dispatch_predict_intra<T: Pixel>(
           })(dst_ptr, stride, edge_ptr, w, h, ac_ptr, angle);
         }
         PredictionMode::H_PRED => {
-          rav1e_ipred_h_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
+          if angle == 180 {
+            rav1e_ipred_h_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
+          } else {
+            call_native(dst);
+          }
         }
         PredictionMode::V_PRED => {
-          rav1e_ipred_v_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
+          if angle == 90 {
+            rav1e_ipred_v_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
+          } else {
+            call_native(dst);
+          }
         }
         PredictionMode::PAETH_PRED => {
           rav1e_ipred_paeth_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
@@ -259,6 +283,8 @@ mod test {
           267,
         ]
         .iter(),
+        PredictionMode::H_PRED => [171, 174, 177, 180, 183, 186, 189].iter(),
+        PredictionMode::V_PRED => [81, 84, 87, 90, 93, 96, 99].iter(),
         _ => [0].iter(),
       };
       for angle in angles {

@@ -110,10 +110,18 @@ pub fn dispatch_predict_intra<T: Pixel>(
           })(dst_ptr, stride, edge_ptr, w, h, ac_ptr, angle);
         }
         PredictionMode::H_PRED => {
-          rav1e_ipred_h_neon(dst_ptr, stride, edge_ptr, w, h, angle);
+          if angle == 180 {
+            rav1e_ipred_h_neon(dst_ptr, stride, edge_ptr, w, h, angle);
+          } else {
+            call_native(dst);
+          }
         }
         PredictionMode::V_PRED => {
-          rav1e_ipred_v_neon(dst_ptr, stride, edge_ptr, w, h, angle);
+          if angle == 90 {
+            rav1e_ipred_v_neon(dst_ptr, stride, edge_ptr, w, h, angle);
+          } else {
+            call_native(dst);
+          }
         }
         PredictionMode::PAETH_PRED => {
           rav1e_ipred_paeth_neon(dst_ptr, stride, edge_ptr, w, h, angle);
