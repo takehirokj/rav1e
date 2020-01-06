@@ -142,8 +142,8 @@ pub fn intra_bench<T: Pixel>(
     PixelType::U16 => 10,
   };
   let angle = match mode {
-    PredictionMode::H_PRED => 180,
     PredictionMode::V_PRED => 90,
+    PredictionMode::H_PRED => 180,
     _ => 0,
   };
   b.iter(|| {

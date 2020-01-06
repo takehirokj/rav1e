@@ -801,6 +801,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, best.sidx);
 
     let chroma_mode = PredictionMode::UV_CFL_PRED;
+    let angle_delta = AngleDelta { y: best.angle_delta.y, uv: 0 };
     let cw_checkpoint = cw.checkpoint();
     let wr: &mut dyn Writer = &mut WriterCounter::new();
 
@@ -811,7 +812,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       wr,
       best.pred_mode_luma,
       best.pred_mode_luma,
-      best.angle_delta,
+      angle_delta,
       tile_bo,
       bsize,
       best.tx_size,
@@ -849,7 +850,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         wr,
         best.pred_mode_luma,
         chroma_mode,
-        best.angle_delta,
+        angle_delta,
         best.ref_frames,
         best.mvs,
         bsize,
@@ -876,6 +877,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         best.pred_mode_chroma = chroma_mode;
         best.has_coeff = has_coeff;
         best.pred_cfl_params = cfl;
+        best.angle_delta = angle_delta;
       }
 
       cw.rollback(&cw_checkpoint);

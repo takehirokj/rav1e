@@ -126,27 +126,11 @@ pub fn dispatch_predict_intra<T: Pixel>(
             PredictionVariant::BOTH => rav1e_ipred_cfl_avx2,
           })(dst_ptr, stride, edge_ptr, w, h, ac_ptr, angle);
         }
-        PredictionMode::H_PRED => {
-          if angle == 180 {
-            rav1e_ipred_h_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
-          } else {
-            (if angle < 180 {
-              rav1e_ipred_z2_avx2
-            } else {
-              rav1e_ipred_z3_avx2
-            })(dst_ptr, stride, edge_ptr, w, h, angle);
-          }
+        PredictionMode::V_PRED if angle == 90 => {
+          rav1e_ipred_v_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
         }
-        PredictionMode::V_PRED => {
-          if angle == 90 {
-            rav1e_ipred_v_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
-          } else {
-            (if angle <= 90 {
-              rav1e_ipred_z1_avx2
-            } else {
-              rav1e_ipred_z2_avx2
-            })(dst_ptr, stride, edge_ptr, w, h, angle);
-          }
+        PredictionMode::H_PRED if angle == 180 => {
+          rav1e_ipred_h_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
         }
         PredictionMode::PAETH_PRED => {
           rav1e_ipred_paeth_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
@@ -160,7 +144,9 @@ pub fn dispatch_predict_intra<T: Pixel>(
         PredictionMode::SMOOTH_V_PRED => {
           rav1e_ipred_smooth_v_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
         }
-        PredictionMode::D45_PRED
+        PredictionMode::V_PRED
+        | PredictionMode::H_PRED
+        | PredictionMode::D45_PRED
         | PredictionMode::D63_PRED
         | PredictionMode::D117_PRED
         | PredictionMode::D135_PRED
@@ -195,19 +181,11 @@ pub fn dispatch_predict_intra<T: Pixel>(
             PredictionVariant::BOTH => rav1e_ipred_cfl_ssse3,
           })(dst_ptr, stride, edge_ptr, w, h, ac_ptr, angle);
         }
-        PredictionMode::H_PRED => {
-          if angle == 180 {
-            rav1e_ipred_h_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
-          } else {
-            call_native(dst);
-          }
+        PredictionMode::V_PRED if angle == 90 => {
+          rav1e_ipred_v_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
         }
-        PredictionMode::V_PRED => {
-          if angle == 90 {
-            rav1e_ipred_v_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
-          } else {
-            call_native(dst);
-          }
+        PredictionMode::H_PRED if angle == 180 => {
+          rav1e_ipred_h_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
         }
         PredictionMode::PAETH_PRED => {
           rav1e_ipred_paeth_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
@@ -269,22 +247,21 @@ mod test {
       let angles = match mode {
         PredictionMode::D45_PRED => [
           3, 6, 9, 14, 17, 20, 23, 26, 29, 32, 36, 39, 42, 45, 48, 51, 54, 58,
-          61, 64, 67, 70, 73, 76, 81, 84, 87,
+          61, 64, 67, 70, 73, 76,
         ]
         .iter(),
+        PredictionMode::V_PRED => [81, 84, 87, 90, 93, 96, 99].iter(),
         PredictionMode::D135_PRED => [
-          93, 96, 99, 104, 107, 110, 113, 116, 119, 122, 126, 129, 132, 135,
-          138, 141, 144, 148, 151, 154, 157, 160, 163, 166, 171, 174, 177,
-        ]
-        .iter(),
-        PredictionMode::D207_PRED => [
-          183, 186, 189, 194, 197, 200, 203, 206, 209, 212, 216, 219, 222,
-          225, 228, 231, 234, 238, 241, 244, 247, 250, 253, 256, 261, 264,
-          267,
+          104, 107, 110, 113, 116, 119, 122, 126, 129, 132, 135, 138, 141,
+          144, 148, 151, 154, 157, 160, 163, 166,
         ]
         .iter(),
         PredictionMode::H_PRED => [171, 174, 177, 180, 183, 186, 189].iter(),
-        PredictionMode::V_PRED => [81, 84, 87, 90, 93, 96, 99].iter(),
+        PredictionMode::D207_PRED => [
+          194, 197, 200, 203, 206, 209, 212, 216, 219, 222, 225, 228, 231,
+          234, 238, 241, 244, 247, 250, 253, 256, 261, 264, 267,
+        ]
+        .iter(),
         _ => [0].iter(),
       };
       for angle in angles {
