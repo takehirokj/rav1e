@@ -17,6 +17,7 @@ use crate::util::{clamp, msb, CastFromPrimitive, Pixel};
 
 use crate::cpu_features::CpuFeatureLevel;
 use std::cmp;
+use rayon::prelude::*;
 
 cfg_if::cfg_if! {
   if #[cfg(nasm_x86_64)] {
@@ -422,6 +423,119 @@ pub fn cdef_sb_padded_frame_copy<T: Pixel>(
   out
 }
 
+pub fn cdef_filter_plane<T: Pixel>(
+  out_plane: &mut Plane<T>,
+  in_plane: &Plane<u16>,
+  pli: usize,
+  blocks: &TileBlocks<'_>,
+  sbo: TileSuperBlockOffset,
+  sbo_global: TileSuperBlockOffset,
+  cdef_dirs: &CdefDirections,
+  coeff_shift: i32,
+  cdef_damping: i32,
+  cdef_pri_y_strength: i32,
+  cdef_pri_uv_strength: i32,
+  cdef_sec_y_strength: i32,
+  cdef_sec_uv_strength: i32,
+  bit_depth: usize,
+  cpu_feature_level: CpuFeatureLevel,
+) {
+  // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
+  for by in 0..8 {
+    for bx in 0..8 {
+      let global_block_offset = sbo_global.block_offset(bx << 1, by << 1);
+      if global_block_offset.0.x < blocks.cols()
+        && global_block_offset.0.y < blocks.rows()
+      {
+        let skip = blocks[global_block_offset].skip
+          & blocks[sbo_global.block_offset(2 * bx + 1, 2 * by)].skip
+          & blocks[sbo_global.block_offset(2 * bx, 2 * by + 1)].skip
+          & blocks[sbo_global.block_offset(2 * bx + 1, 2 * by + 1)].skip;
+        let dir = cdef_dirs.dir[bx][by];
+        let var = cdef_dirs.var[bx][by];
+        let in_po = sbo.plane_offset(&in_plane.cfg);
+        let xdec = in_plane.cfg.xdec;
+        let ydec = in_plane.cfg.ydec;
+        let in_stride = in_plane.cfg.stride;
+        let in_slice = in_plane.slice(in_po);
+        let out_region = &mut out_plane
+          .region_mut(Area::BlockStartingAt { bo: sbo.block_offset(0, 0).0 });
+        let xsize = 8 >> xdec;
+        let ysize = 8 >> ydec;
+
+        if !skip {
+          let local_pri_strength;
+          let local_sec_strength;
+          let mut local_damping: i32 = cdef_damping + coeff_shift;
+          let local_dir = if pli == 0 {
+            local_pri_strength =
+              adjust_strength(cdef_pri_y_strength << coeff_shift, var);
+            local_sec_strength = cdef_sec_y_strength << coeff_shift;
+            if cdef_pri_y_strength != 0 {
+              dir as usize
+            } else {
+              0
+            }
+          } else {
+            local_pri_strength = cdef_pri_uv_strength << coeff_shift;
+            local_sec_strength = cdef_sec_uv_strength << coeff_shift;
+            local_damping -= 1;
+            if cdef_pri_uv_strength != 0 {
+              dir as usize
+            } else {
+              0
+            }
+          };
+
+          unsafe {
+            let PlaneConfig { ypad, xpad, .. } = in_slice.plane.cfg;
+            assert!(
+              in_slice.rows_iter().len() + ypad
+                >= ((8 * by) >> ydec) + ysize + 2
+            );
+            assert!(in_slice.x - 2 >= -(xpad as isize));
+            assert!(in_slice.y - 2 >= -(ypad as isize));
+
+            let mut dst = out_region.subregion_mut(Area::BlockRect {
+              bo: BlockOffset { x: 2 * bx, y: 2 * by },
+              width: xsize,
+              height: ysize,
+            });
+            let input =
+              in_slice[(8 * by) >> ydec][(8 * bx) >> xdec..].as_ptr();
+            cdef_filter_block(
+              &mut dst,
+              input,
+              in_stride as isize,
+              local_pri_strength,
+              local_sec_strength,
+              local_dir,
+              local_damping,
+              bit_depth,
+              xdec,
+              ydec,
+              cpu_feature_level,
+            );
+          }
+        } else {
+          // we need to copy input to output
+          let in_block = in_slice.subslice((8 * bx) >> xdec, (8 * by) >> ydec);
+          let mut out_block = out_region.subregion_mut(Area::BlockRect {
+            bo: BlockOffset { x: 2 * bx, y: 2 * by },
+            width: xsize,
+            height: ysize,
+          });
+          for i in 0..ysize {
+            for j in 0..xsize {
+              out_block[i][j] = T::cast_from(in_block[i][j]);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 // We assume in is padded, and the area we'll write out is at least as
 // large as the unpadded area of in
 // cdef_index is taken from the block context
@@ -448,106 +562,28 @@ pub fn cdef_filter_superblock<T: Pixel>(
     cdef_sec_uv_strength += 1;
   }
 
-  // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
-  for by in 0..8 {
-    for bx in 0..8 {
-      let global_block_offset = sbo_global.block_offset(bx << 1, by << 1);
-      if global_block_offset.0.x < blocks.cols()
-        && global_block_offset.0.y < blocks.rows()
-      {
-        let skip = blocks[global_block_offset].skip
-          & blocks[sbo_global.block_offset(2 * bx + 1, 2 * by)].skip
-          & blocks[sbo_global.block_offset(2 * bx, 2 * by + 1)].skip
-          & blocks[sbo_global.block_offset(2 * bx + 1, 2 * by + 1)].skip;
-        let dir = cdef_dirs.dir[bx][by];
-        let var = cdef_dirs.var[bx][by];
-        for p in 0..3 {
-          let out_plane = &mut out_frame.planes[p];
-          let in_plane = &in_frame.planes[p];
-          let in_po = sbo.plane_offset(&in_plane.cfg);
-          let xdec = in_plane.cfg.xdec;
-          let ydec = in_plane.cfg.ydec;
-          let in_stride = in_plane.cfg.stride;
-          let in_slice = &in_plane.slice(in_po);
-          let out_region = &mut out_plane.region_mut(Area::BlockStartingAt {
-            bo: sbo.block_offset(0, 0).0,
-          });
-          let xsize = 8 >> xdec;
-          let ysize = 8 >> ydec;
-
-          if !skip {
-            let local_pri_strength;
-            let local_sec_strength;
-            let mut local_damping: i32 = cdef_damping + coeff_shift;
-            let local_dir = if p == 0 {
-              local_pri_strength =
-                adjust_strength(cdef_pri_y_strength << coeff_shift, var);
-              local_sec_strength = cdef_sec_y_strength << coeff_shift;
-              if cdef_pri_y_strength != 0 {
-                dir as usize
-              } else {
-                0
-              }
-            } else {
-              local_pri_strength = cdef_pri_uv_strength << coeff_shift;
-              local_sec_strength = cdef_sec_uv_strength << coeff_shift;
-              local_damping -= 1;
-              if cdef_pri_uv_strength != 0 {
-                dir as usize
-              } else {
-                0
-              }
-            };
-
-            unsafe {
-              let PlaneConfig { ypad, xpad, .. } = in_slice.plane.cfg;
-              assert!(
-                in_slice.rows_iter().len() + ypad
-                  >= ((8 * by) >> ydec) + ysize + 2
-              );
-              assert!(in_slice.x - 2 >= -(xpad as isize));
-              assert!(in_slice.y - 2 >= -(ypad as isize));
-
-              let mut dst = out_region.subregion_mut(Area::BlockRect {
-                bo: BlockOffset { x: 2 * bx, y: 2 * by },
-                width: xsize,
-                height: ysize,
-              });
-              let input =
-                in_slice[(8 * by) >> ydec][(8 * bx) >> xdec..].as_ptr();
-              cdef_filter_block(
-                &mut dst,
-                input,
-                in_stride as isize,
-                local_pri_strength,
-                local_sec_strength,
-                local_dir,
-                local_damping,
-                bit_depth,
-                xdec,
-                ydec,
-                fi.cpu_feature_level,
-              );
-            }
-          } else {
-            // we need to copy input to output
-            let in_block =
-              in_slice.subslice((8 * bx) >> xdec, (8 * by) >> ydec);
-            let mut out_block = out_region.subregion_mut(Area::BlockRect {
-              bo: BlockOffset { x: 2 * bx, y: 2 * by },
-              width: xsize,
-              height: ysize,
-            });
-            for i in 0..ysize {
-              for j in 0..xsize {
-                out_block[i][j] = T::cast_from(in_block[i][j]);
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+  (out_frame.planes).par_iter_mut().enumerate().for_each(
+    |(pli, out_plane)| {
+      let in_plane = &in_frame.planes[pli];
+      cdef_filter_plane(
+        out_plane,
+        in_plane,
+        pli,
+        blocks,
+        sbo,
+        sbo_global,
+        cdef_dirs,
+        coeff_shift,
+        cdef_damping,
+        cdef_pri_y_strength,
+        cdef_pri_uv_strength,
+        cdef_sec_y_strength,
+        cdef_sec_uv_strength,
+        bit_depth,
+        fi.cpu_feature_level,
+      )
+    },
+  );
 }
 
 // Input to this process is the array CurrFrame of reconstructed samples.
