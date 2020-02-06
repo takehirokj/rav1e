@@ -12,10 +12,8 @@ use num_derive::FromPrimitive;
 use crate::api::ChromaSampling;
 use crate::context::SB_SIZE;
 use crate::mc::SUBPEL_FILTER_SIZE;
-use crate::util::*;
-
-#[cfg(test)]
 use crate::tiling::*;
+use crate::util::*;
 
 mod plane;
 pub use plane::*;
@@ -103,7 +101,6 @@ impl<T: Pixel> Frame<T> {
   }
 
   #[inline(always)]
-  #[cfg(test)]
   pub fn as_tile_mut(&mut self) -> TileMut<'_, T> {
     let PlaneConfig { width, height, .. } = self.planes[0].cfg;
     TileMut::new(self, TileRect { x: 0, y: 0, width, height })

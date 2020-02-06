@@ -1990,7 +1990,7 @@ pub fn rdo_loop_decision<T: Pixel>(
             cdef_filter_superblock(
               fi,
               cdef_input,
-              &mut lrf_input,
+              &mut lrf_input.as_tile_mut(),
               &cw.bc.blocks.as_const(),
               loop_sbo,
               loop_tile_sbo,
@@ -2131,7 +2131,7 @@ pub fn rdo_loop_decision<T: Pixel>(
           cdef_filter_superblock(
             fi,
             cdef_input,
-            &mut lrf_input,
+            &mut lrf_input.as_tile_mut(),
             &cw.bc.blocks.as_const(),
             loop_sbo,
             loop_tile_sbo,

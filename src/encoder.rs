@@ -2940,24 +2940,50 @@ fn encode_tile_group<T: Pixel>(
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
     deblock_filter_frame(fi, fs, &blocks);
   }
+  // TODO decide number from width/height
+  let cdef_tile_cols = 4;
+  let cdef_tile_rows = 4;
 
+  let cdef_ti = TilingInfo::from_target_tiles(
+    fi.sequence.sb_size_log2(),
+    fi.config.width,
+    fi.config.height,
+    fi.config.frame_rate(),
+    TilingInfo::tile_log2(1, cdef_tile_cols).unwrap(),
+    TilingInfo::tile_log2(1, cdef_tile_rows).unwrap(),
+  );
+  // TODO consider to add additional fn call exists in other place
   if fi.sequence.enable_restoration {
     // Until the loop filters are pipelined, we'll need to keep
     // around a copy of both the pre- and post-cdef frame.
     let pre_cdef_frame = fs.rec.clone();
 
     /* TODO: Don't apply if lossless */
-    let rec = Arc::make_mut(&mut fs.rec);
     if fi.sequence.enable_cdef {
-      cdef_filter_frame(fi, rec, &blocks);
+      cdef_ti
+        .tile_iter_mut(fs, &mut blocks)
+        .collect::<Vec<_>>()
+        .into_par_iter()
+        .for_each(|mut ctx| {
+          cdef_filter_tile(fi, &mut ctx.ts, &ctx.tb.as_const());
+        });
     }
     /* TODO: Don't apply if lossless */
-    fs.restoration.lrf_filter_frame(rec, &pre_cdef_frame, fi);
+    fs.restoration.lrf_filter_frame(
+      Arc::make_mut(&mut fs.rec),
+      &pre_cdef_frame,
+      fi,
+    );
   } else {
     /* TODO: Don't apply if lossless */
-    let rec = Arc::make_mut(&mut fs.rec);
     if fi.sequence.enable_cdef {
-      cdef_filter_frame(fi, rec, &blocks);
+      cdef_ti
+        .tile_iter_mut(fs, &mut blocks)
+        .collect::<Vec<_>>()
+        .into_par_iter()
+        .for_each(|mut ctx| {
+          cdef_filter_tile(fi, &mut ctx.ts, &ctx.tb.as_const());
+        });
     }
   }
 
