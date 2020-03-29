@@ -2085,9 +2085,16 @@ pub fn rdo_loop_decision<T: Pixel>(
             let mut err = ScaledDistortion::zero();
             let mut rate = 0;
 
-            let PlaneConfig { width, height, .. } = cdef_ref.planes[0].cfg;
-            let mut cdef_ref_tm =
-              TileMut::new(cdef_ref, TileRect { x: 0, y: 0, width, height });
+            let mut cdef_ref_tm = TileMut::new(
+              cdef_ref,
+              TileRect {
+                x: 0,
+                y: 0,
+                width: cdef_ref.planes[0].cfg.width,
+                height: cdef_ref.planes[0].cfg.height,
+              },
+            );
+
             cdef_filter_superblock(
               fi,
               &rec_subset,
@@ -2234,9 +2241,15 @@ pub fn rdo_loop_decision<T: Pixel>(
             tileblocks_subset.set_cdef(loop_sbo, best_new_index as u8);
           }
 
-          let PlaneConfig { width, height, .. } = cdef_ref.planes[0].cfg;
-          let mut cdef_ref_tm =
-            TileMut::new(cdef_ref, TileRect { x: 0, y: 0, width, height });
+          let mut cdef_ref_tm = TileMut::new(
+            cdef_ref,
+            TileRect {
+              x: 0,
+              y: 0,
+              width: cdef_ref.planes[0].cfg.width,
+              height: cdef_ref.planes[0].cfg.height,
+            },
+          );
 
           // Keep cdef output up to date; we need it for restoration
           // both below and above (padding)
