@@ -490,6 +490,7 @@ pub struct FrameInvariants<T: Pixel> {
   pub w_in_b: usize,
   pub h_in_b: usize,
   pub tiling: TilingInfo,
+  pub cdef_tiling: TilingInfo,
   pub input_frameno: u64,
   pub order_hint: u32,
   pub show_frame: bool,
@@ -643,6 +644,19 @@ impl<T: Pixel> FrameInvariants<T> {
       }
     }
 
+    let cdef_tile_size = SB_SIZE * 8;
+    let cdef_tile_cols = (config.width + cdef_tile_size - 1) / cdef_tile_size;
+    let cdef_tile_rows = (config.height + cdef_tile_size - 1) / cdef_tile_size;
+
+    let cdef_tiling = TilingInfo::from_target_tiles(
+      sequence.sb_size_log2(),
+      config.width,
+      config.height,
+      config.frame_rate(),
+      TilingInfo::tile_log2(1, cdef_tile_cols).unwrap(),
+      TilingInfo::tile_log2(1, cdef_tile_rows).unwrap(),
+    );
+
     // Width and height are padded to 8×8 block size.
     let w_in_imp_b = w_in_b / 2;
     let h_in_imp_b = h_in_b / 2;
@@ -656,6 +670,7 @@ impl<T: Pixel> FrameInvariants<T> {
       w_in_b,
       h_in_b,
       tiling,
+      cdef_tiling,
       input_frameno: 0,
       order_hint: 0,
       show_frame: true,

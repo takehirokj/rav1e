@@ -597,30 +597,19 @@ pub fn cdef_filter_superblock<T: Pixel, U: Pixel>(
 pub fn cdef_filter_tile_group<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, blocks: &mut FrameBlocks,
 ) {
-  let tile_size = SB_SIZE * 8;
-  let tile_cols = (fi.config.width + tile_size - 1) / tile_size;
-  let tile_rows = (fi.config.height + tile_size - 1) / tile_size;
-
-  let ti = TilingInfo::from_target_tiles(
-    fi.sequence.sb_size_log2(),
-    fi.config.width,
-    fi.config.height,
-    fi.config.frame_rate(),
-    TilingInfo::tile_log2(1, tile_cols).unwrap(),
-    TilingInfo::tile_log2(1, tile_rows).unwrap(),
-  );
-
   let in_padded_frame = cdef_padded_frame_copy(&fs.rec);
-  ti.tile_iter_mut(fs, blocks).collect::<Vec<_>>().into_par_iter().for_each(
-    |mut ctx| {
+  fi.cdef_tiling
+    .tile_iter_mut(fs, blocks)
+    .collect::<Vec<_>>()
+    .into_par_iter()
+    .for_each(|mut ctx| {
       cdef_filter_tile(
         fi,
         &mut ctx.ts.rec,
         &ctx.tb.as_const(),
         &in_padded_frame,
       );
-    },
-  );
+    });
 }
 
 // Input to this process is the array CurrFrame of reconstructed samples and padded input Frame.
