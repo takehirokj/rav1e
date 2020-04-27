@@ -314,9 +314,7 @@ macro_rules! plane_region_common {
         let mut ret: Plane<T> = Plane::new(width, height, xdec, ydec, 0, 0);
         let mut dst: PlaneRegionMut<T> = ret.as_region_mut();
         for (dst_row, src_row) in dst.rows_iter_mut().zip(self.rows_iter()) {
-          for (out, input) in dst_row.iter_mut().zip(src_row) {
-            *out = *input;
-          }
+          dst_row[..width].copy_from_slice(src_row);
         }
         ret
       }
