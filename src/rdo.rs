@@ -1092,7 +1092,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
     }
   }
 
-  inter_mode_set.iter().for_each(|&(luma_mode, i)| {
+  inter_mode_set.iter().rev().for_each(|&(luma_mode, i)| {
     let mvs = match luma_mode {
       PredictionMode::NEWMV | PredictionMode::NEW_NEWMV => mvs_from_me[i],
       PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => {
