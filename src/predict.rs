@@ -121,7 +121,7 @@ pub enum PredictionVariant {
 
 impl PredictionVariant {
   #[inline]
-  fn new(x: usize, y: usize) -> Self {
+  const fn new(x: usize, y: usize) -> Self {
     match (x, y) {
       (0, 0) => PredictionVariant::NONE,
       (_, 0) => PredictionVariant::LEFT,
@@ -138,7 +138,7 @@ impl Default for PredictionMode {
   }
 }
 
-pub fn intra_mode_to_angle(mode: PredictionMode) -> isize {
+pub const fn intra_mode_to_angle(mode: PredictionMode) -> isize {
   match mode {
     PredictionMode::V_PRED => 90,
     PredictionMode::H_PRED => 180,

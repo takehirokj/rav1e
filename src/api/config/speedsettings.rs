@@ -213,7 +213,7 @@ impl SpeedSettings {
     speed <= 5
   }
 
-  fn prediction_modes_preset(speed: usize) -> PredictionModesSetting {
+  const fn prediction_modes_preset(speed: usize) -> PredictionModesSetting {
     if speed <= 2 {
       PredictionModesSetting::ComplexAll
     } else if speed <= 6 {
@@ -243,7 +243,7 @@ impl SpeedSettings {
     speed <= 9
   }
 
-  fn sgr_complexity_preset(speed: usize) -> SGRComplexityLevel {
+  const fn sgr_complexity_preset(speed: usize) -> SGRComplexityLevel {
     if speed <= 4 {
       SGRComplexityLevel::Full
     } else {
@@ -271,7 +271,7 @@ impl SpeedSettings {
     speed >= 9
   }
 
-  fn fine_directional_intra_preset(_speed: usize) -> bool {
+  const fn fine_directional_intra_preset(_speed: usize) -> bool {
     true
   }
 }
